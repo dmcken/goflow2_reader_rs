@@ -298,7 +298,7 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
             2228 => if let ProtobufValue::Varint(v ) = value {
                 record.post_napt_dst_transport_port = Some(v as u16);
             },
-            _ => println!("Unhandled field ID '{}' with value '{:?}'", field, value),
+            _ => println!("Unhandled protobuf field ID '{}' with value '{:?}'", field, value),
         }
     }
 
