@@ -15,13 +15,21 @@ use serde::Serialize;
 
 // Data structures
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 #[allow(dead_code)]
 enum ProtobufValue {
     Varint(u64),
     Fixed64(u64),
     LengthDelimited(Vec<u8>),
     Fixed32(u32),
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+enum OutputFormat {
+    JsonPretty,
+    Json,
+    Csv,
 }
 
 #[derive(Serialize, Debug)]
@@ -66,13 +74,20 @@ impl NetflowRecord {
 }
 
 #[derive(Parser, Debug)]
+#[clap(about = "Load and print protobuf files created by goflow2.")]
 struct Args {
-    #[arg(long)]
+    #[arg(short,long)]
+    #[clap(help = "File to load")]
+    path: String,
+    #[arg(short,long)]
+    #[clap(help = "Filter of what records to display")]
     filter: Option<String>,
     #[arg(short,long)]
-    file_path: String,
-    #[arg(short,long)]
+    #[clap(help = "Limit number of results to display")]
     limit: Option<u64>,
+    #[arg(short,long)]
+    #[clap(help = "Output format to display records in (json, json-pretty, csv)")]
+    output: Option<String>,
 }
 
 // Functions
@@ -315,11 +330,18 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
     return record;
 }
 
-fn json_serializer<T: Serialize>(value: &T, pretty: bool) -> Result<String, serde_json::Error> {
-    if pretty {
-        serde_json::to_string_pretty(value)
-    } else {
-        serde_json::to_string(value)
+// Format the object to a string
+fn csv_to_string<T: Serialize>(to_format: &T) -> Result<String, serde_json::Error> {
+    let mut output = String::new();
+
+    Ok(output)
+}
+
+fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> Result<String, serde_json::Error> {
+    match output_format {
+        OutputFormat::JsonPretty => serde_json::to_string_pretty(value),
+        OutputFormat::Json        => serde_json::to_string(value),
+        OutputFormat::Csv         => csv_to_string(value),
     }
 }
 
@@ -348,9 +370,9 @@ fn main()  -> std::io::Result<()> {
         query = filter;
     }
 
-    let pretty = false;
+    let output_format: OutputFormat = OutputFormat::Json;
 
-    let file_path = args.file_path;
+    let file_path = args.path;
 
     println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
 
@@ -359,31 +381,28 @@ fn main()  -> std::io::Result<()> {
     let decompressor = BzDecoder::new(file_buf);
     let mut decompressed = BufReader::new(decompressor);
 
-
-
     let mut count: u64 = 0;
 
     while let Some(record_length) = read_varint_reader(&mut decompressed) {
 
-
-        // let record_length = read_varint_reader (&mut file_buf)?;
-
         // println!("Record length: {} => {}", count, record_length);
 
+        // A record separator can be omited, make this optional
         let mut eor_value = [0u8; 1];
-        let mut raw_record = vec![0u8; record_length as usize];
-        decompressed.read_exact(&mut raw_record)?;
+        // The protobuf bytes
+        let mut raw_record_bytes = vec![0u8; record_length as usize];
+
+        decompressed.read_exact(&mut raw_record_bytes)?;
 
         decompressed.read_exact(&mut eor_value)?;
         // println!("End of record value: {:02X}", eor_value[0]);
 
-
-        let parsed = parse_protobuf_message(raw_record);
+        // Parsed protobuf to
+        let parsed = parse_protobuf_message(raw_record_bytes);
+        // println!("Protobuf raw fields: {:#?}", record);
 
         let record = protobuf_to_record(parsed);
-
-        // println!("Netflow record: {:#?}", record);
-
+        // println!("Netflow struct: {:#?}", record);
 
         if let Some(ref _filter_str) = args.filter {
             let mut scope = Scope::new();
@@ -405,7 +424,7 @@ fn main()  -> std::io::Result<()> {
 
             match engine.eval_with_scope::<bool>(&mut scope, filter_expr) {
                 Ok(true) => {
-                    let json_str = json_serializer(&record, pretty).unwrap();
+                    let json_str = output_serializer(&record, &output_format).unwrap();
                     println!("{}", json_str);
                     count += 1;
                 },
@@ -414,7 +433,7 @@ fn main()  -> std::io::Result<()> {
             }
         } else {
             // No filter
-            let json_str = json_serializer(&record, pretty).unwrap();
+            let json_str = output_serializer(&record, &output_format).unwrap();
             println!("{}", json_str);
             count += 1;
         }
