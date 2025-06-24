@@ -345,17 +345,6 @@ fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> R
     }
 }
 
-/*
-time cargo run --release -- \
-    --limit 10
-    --file-path data/goflow2_20250616_1430.log.bz2
-    --filter 'post_napt_src_transport_port == 57068 && post_nat_src_ipv4_address == "103.153.239.42"'
-
-
-    Alternative filters:
-      'ip_in_cidr(addr_src,"10.1.0.0/16")'
-      'addr_src == "103.153.238.161"'
-*/
 fn main()  -> std::io::Result<()> {
     let args = Args::parse();
     let mut engine = Engine::new();
