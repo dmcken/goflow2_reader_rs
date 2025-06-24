@@ -57,24 +57,14 @@ struct NetflowRecord {
 }
 
 impl NetflowRecord {
-    fn proto(&self) -> i64 {
-        self.proto as i64
-    }
-
-    fn bytes(&self) -> i64 {
-        self.bytes as i64
-    }
-
-    fn addr_src_str(&self) -> String {
-        self.addr_src.to_string()
-    }
-    fn addr_dst_str(&self) -> String {
-        self.addr_dst.to_string()
-    }
+    fn proto(&self) -> i64           {   self.proto as i64          }
+    fn bytes(&self) -> i64           {   self.bytes as i64          }
+    fn addr_src_str(&self) -> String {   self.addr_src.to_string()  }
+    fn addr_dst_str(&self) -> String {   self.addr_dst.to_string()  }
 }
 
 #[derive(Parser, Debug)]
-#[clap(about = "Load and print protobuf files created by goflow2.")]
+#[clap(about = "Load and print binary protobuf files created by goflow2.")]
 struct Args {
     #[arg(short,long)]
     #[clap(help = "File to load")]
@@ -111,6 +101,8 @@ fn ip_in_cidr(ip_str: &str, cidr_str: &str) -> bool {
         _ => false,
     }
 }
+
+// Protobuf helpers
 
 fn read_varint_reader<R: Read>(reader: &mut R) -> Option<u64> {
     let mut result = 0u64;
@@ -195,6 +187,7 @@ fn parse_protobuf_message(data: Vec<u8>) -> HashMap<u32, ProtobufValue> {
     map
 }
 
+// My helpers
 fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
     match bytes.len() {
         4 => {
@@ -239,9 +232,7 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
         // println!("Field {} => {:?}", field, value);
         match field {
             1 => (), // Don't care which flow protocol
-            4 => if let ProtobufValue::Varint(v) = value {
-                record.sequence_num = v;
-            },
+            4 => if let ProtobufValue::Varint(v) = value { record.sequence_num = v; },
             6 => if let ProtobufValue::LengthDelimited(v) = value {
                 if let Some(ip) = vec_to_ip_addr(v) {
                     record.addr_src = ip;
@@ -252,12 +243,8 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
                     record.addr_dst = ip;
                 }
             },
-            9 => if let ProtobufValue::Varint(v) = value {
-                record.bytes = v;
-            },
-            10 => if let ProtobufValue::Varint(v) = value {
-                record.packets = v;
-            },
+            9   => if let ProtobufValue::Varint(v) = value { record.bytes = v;   },
+            10  => if let ProtobufValue::Varint(v) = value { record.packets = v; },
             11 => if let ProtobufValue::LengthDelimited(v) = value {
                 if let Some(ip) = vec_to_ip_addr(v) {
                     record.addr_sampler = ip;
@@ -269,29 +256,17 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
                 }
             },
             18 | 19 => (), // in_if and out_if
-            20 => if let ProtobufValue::Varint(v) = value {
-                record.proto = v as u16;
-            },
-            21 => if let ProtobufValue::Varint(v) = value {
-                record.port_src = v as u16;
-            },
-            22 => if let ProtobufValue::Varint(v) = value {
-                record.port_dst = v as u16;
-            },
-            23 => (), // IP TOS
-            26 => (), // TCP Flags
-            27 => if let ProtobufValue::Varint(v) = value {
-                record.mac_src = Some(v);
-            },
-            28 => if let ProtobufValue::Varint(v) = value {
-                record.mac_dst = Some(v);
-            },
-            30 => if let ProtobufValue::Varint(v ) = value {
-                record.etype = v as u16;
-            },
-            31 => (), // ICMP type
-            32 => (), // ICMP Code
-            37 => (), // ipv6_flow_label
+            20  => if let ProtobufValue::Varint(v) = value { record.proto = v as u16;    },
+            21  => if let ProtobufValue::Varint(v) = value { record.port_src = v as u16; },
+            22  => if let ProtobufValue::Varint(v) = value { record.port_dst = v as u16; },
+            23  => (), // IP TOS
+            26  => (), // TCP Flags
+            27  => if let ProtobufValue::Varint(v) = value { record.mac_src = Some(v);   },
+            28  => if let ProtobufValue::Varint(v) = value { record.mac_dst = Some(v);   },
+            30  => if let ProtobufValue::Varint(v) = value { record.etype = v as u16;    },
+            31  => (), // ICMP type
+            32  => (), // ICMP Code
+            37  => (), // ipv6_flow_label
             110 => if let ProtobufValue::Varint(v) = value {
                 let seconds = v / 1_000_000_000;
                 let nanos = v % 1_000_000_000;
@@ -327,8 +302,10 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
         }
     }
 
-    return record;
+    record
 }
+
+// Serializer helpers
 
 // Format the object to a string
 fn csv_to_string<T: Serialize>(to_format: &T) -> Result<String, serde_json::Error> {
@@ -350,7 +327,6 @@ fn main()  -> std::io::Result<()> {
     let mut engine = Engine::new();
 
     engine.register_fn("ip_in_cidr", ip_in_cidr);
-
 
     // let args: Vec<String> = env::args().collect();
     let mut query: &str = "blank";
@@ -405,7 +381,6 @@ fn main()  -> std::io::Result<()> {
             scope.push("time_flow_start_ns", option_dt(Some(record.time_flow_start_ns)));
 
 
-
             let filter_expr = args
                 .filter
                 .as_deref()
@@ -433,7 +408,7 @@ fn main()  -> std::io::Result<()> {
 
     }
 
-    println!("Count: {}", count);
+    println!("Matched records: {}", count);
 
     Ok(())
 }
