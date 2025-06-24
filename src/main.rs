@@ -324,11 +324,8 @@ fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> R
 
 fn main()  -> std::io::Result<()> {
     let args = Args::parse();
-    let mut engine = Engine::new();
 
-    engine.register_fn("ip_in_cidr", ip_in_cidr);
-
-    // let args: Vec<String> = env::args().collect();
+    // Start - CLI Params
     let mut query: &str = "blank";
     let limit: u64 = args.limit.unwrap_or(0);
     if let Some(filter) = args.filter.as_deref() {
@@ -336,18 +333,27 @@ fn main()  -> std::io::Result<()> {
     }
 
     let output_format: OutputFormat = OutputFormat::Json;
-
     let file_path = args.path;
+
+    // End - CLI Params
 
     println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
 
+    // Start - Open file
     let file = File::open(file_path)?;
     let file_buf = BufReader::new(file);
+    // Make bz2 configurable, if the file is not compressed then the BufReader
+    // above gets used in the while loop below.
     let decompressor = BzDecoder::new(file_buf);
     let mut decompressed = BufReader::new(decompressor);
+    // End - Open file
 
-    let mut count: u64 = 0;
+    // Loop variable initalization
+    let mut engine = Engine::new();
+    engine.register_fn("ip_in_cidr", ip_in_cidr);
 
+    let mut record_count: u64 = 0;
+    // Loop through file
     while let Some(record_length) = read_varint_reader(&mut decompressed) {
 
         // println!("Record length: {} => {}", count, record_length);
@@ -390,7 +396,7 @@ fn main()  -> std::io::Result<()> {
                 Ok(true) => {
                     let json_str = output_serializer(&record, &output_format).unwrap();
                     println!("{}", json_str);
-                    count += 1;
+                    record_count += 1;
                 },
                 Ok(false) => {},
                 Err(e) => eprintln!("Filter error: {e}"),
@@ -399,16 +405,15 @@ fn main()  -> std::io::Result<()> {
             // No filter
             let json_str = output_serializer(&record, &output_format).unwrap();
             println!("{}", json_str);
-            count += 1;
+            record_count += 1;
         }
 
-        if count >= limit {
+        if record_count >= limit {
             break;
         }
-
     }
 
-    println!("Matched records: {}", count);
+    println!("Matched records: {}", record_count);
 
     Ok(())
 }
