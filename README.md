@@ -30,9 +30,9 @@ Supported operators
 
 | operator | Description |
 | -------- | ----------- |
-| == | Equality |
-| && | Logical AND |
-| || | Logical OR |
-| ip_in_cidr | Compare IPs to CIDRs, e.g. ip_in_cidr(addr_src,"10.1.0.0/16") |
+| `==` | Equality |
+| `&&` | Logical AND |
+| `&#124;&#124;` | Logical OR |
+| `ip_in_cidr` | Compare IPs to CIDRs, e.g. ip_in_cidr(addr_src,"10.1.0.0/16") |
 
 
