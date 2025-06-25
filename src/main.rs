@@ -309,9 +309,11 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
 
 // Serializer helpers
 
-// Format the object to a string
+// Format the object to a string in CSV format
 fn csv_to_string<T: Serialize>(to_format: &T) -> Result<String, serde_json::Error> {
     let mut output = String::new();
+
+    // Finish filling out
 
     Ok(output)
 }
@@ -319,8 +321,8 @@ fn csv_to_string<T: Serialize>(to_format: &T) -> Result<String, serde_json::Erro
 fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> Result<String, serde_json::Error> {
     match output_format {
         OutputFormat::JsonPretty => serde_json::to_string_pretty(value),
-        OutputFormat::Json        => serde_json::to_string(value),
-        OutputFormat::Csv         => csv_to_string(value),
+        OutputFormat::Json       => serde_json::to_string(value),
+        OutputFormat::Csv        => csv_to_string(value),
     }
 }
 
@@ -416,7 +418,7 @@ fn main()  -> std::io::Result<()> {
             record_count += 1;
         }
 
-        if record_count >= limit {
+        if limit != 0 && record_count >= limit {
             break;
         }
     }
