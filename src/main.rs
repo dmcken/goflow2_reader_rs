@@ -2,6 +2,7 @@
 // std
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -10,7 +11,7 @@ use std::path::Path;
 // External
 use bzip2::read::BzDecoder;
 use chrono::{DateTime, TimeZone, Utc};
-use clap::Parser;
+use clap::{Parser,ValueEnum};
 use ipnet::IpNet;
 use rhai::{Engine, Scope};
 use serde::Serialize;
@@ -27,12 +28,23 @@ enum ProtobufValue {
     Fixed32(u32),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ValueEnum)]
 #[allow(dead_code)]
 enum OutputFormat {
     JsonPretty,
     Json,
     Csv,
+}
+
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            OutputFormat::JsonPretty => "json-pretty",
+            OutputFormat::Json => "json",
+            OutputFormat::Csv => "csv",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Serialize, Debug)]
@@ -78,9 +90,9 @@ struct Args {
     #[arg(short,long)]
     #[clap(help = "Limit number of results to display")]
     limit: Option<u64>,
-    #[arg(short,long)]
-    #[clap(help = "Output format to display records in (json, json-pretty, csv)")]
-    output: Option<String>,
+    #[arg(short,long, value_enum, default_value_t = OutputFormat::Json)]
+    #[clap(help = "Output format")]
+    output: OutputFormat,
 }
 
 // Functions
@@ -360,7 +372,7 @@ fn main()  -> std::io::Result<()> {
         query = filter;
     }
 
-    let output_format: OutputFormat = OutputFormat::Csv;
+    let output_format: OutputFormat = args.output;
     let file_path = args.path;
 
 
