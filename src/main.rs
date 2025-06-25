@@ -447,7 +447,7 @@ fn main()  -> std::io::Result<()> {
             scope.push("post_nat_src_ipv4_address", option_ip(record.post_nat_src_ipv4_address));
             scope.push("post_napt_src_transport_port", option_u16(record.post_napt_src_transport_port));
             scope.push("time_flow_start_ns", option_dt(Some(record.time_flow_start_ns)));
-
+            // TODO: Finish adding fields
 
             let filter_expr = args
                 .filter
