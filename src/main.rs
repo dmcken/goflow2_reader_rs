@@ -2,8 +2,9 @@
 // std
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read};
+use std::io::{BufRead, BufReader, Cursor, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::path::Path;
 
 // External
 use bzip2::read::BzDecoder;
@@ -12,6 +13,7 @@ use clap::Parser;
 use ipnet::IpNet;
 use rhai::{Engine, Scope};
 use serde::Serialize;
+use xz::read::XzDecoder;
 
 // Data structures
 
@@ -335,17 +337,23 @@ fn main()  -> std::io::Result<()> {
     let output_format: OutputFormat = OutputFormat::Json;
     let file_path = args.path;
 
+
     // End - CLI Params
 
     println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
 
     // Start - Open file
-    let file = File::open(file_path)?;
-    let file_buf = BufReader::new(file);
-    // Make bz2 configurable, if the file is not compressed then the BufReader
-    // above gets used in the while loop below.
-    let decompressor = BzDecoder::new(file_buf);
-    let mut decompressed = BufReader::new(decompressor);
+
+    let file = File::open(&file_path)?;
+    let mut input_handle: Box<dyn BufRead> = match Path::new(&file_path)
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+    {
+        Some("bz2") => Box::new(BufReader::new(BzDecoder::new(file))),
+        Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
+        _           => Box::new(BufReader::new(file)), // plain text
+    };
+
     // End - Open file
 
     // Loop variable initalization
@@ -354,7 +362,7 @@ fn main()  -> std::io::Result<()> {
 
     let mut record_count: u64 = 0;
     // Loop through file
-    while let Some(record_length) = read_varint_reader(&mut decompressed) {
+    while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
         // println!("Record length: {} => {}", count, record_length);
 
@@ -363,9 +371,9 @@ fn main()  -> std::io::Result<()> {
         // The protobuf bytes
         let mut raw_record_bytes = vec![0u8; record_length as usize];
 
-        decompressed.read_exact(&mut raw_record_bytes)?;
+        input_handle.read_exact(&mut raw_record_bytes)?;
 
-        decompressed.read_exact(&mut eor_value)?;
+        input_handle.read_exact(&mut eor_value)?;
         // println!("End of record value: {:02X}", eor_value[0]);
 
         // Parsed protobuf to
