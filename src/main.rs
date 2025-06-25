@@ -363,9 +363,12 @@ fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> R
 }
 
 fn main()  -> std::io::Result<()> {
-    let args = Args::parse();
+
+    // TODO - The Start / End sections should be their own functions.
 
     // Start - CLI Params
+    let args = Args::parse();
+
     let mut query: &str = "blank";
     let limit: u64 = args.limit.unwrap_or(0);
     if let Some(filter) = args.filter.as_deref() {
@@ -374,14 +377,11 @@ fn main()  -> std::io::Result<()> {
 
     let output_format: OutputFormat = args.output;
     let file_path = args.path;
-
-
     // End - CLI Params
 
     println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
 
     // Start - Open file
-
     let file = File::open(&file_path)?;
     let mut input_handle: Box<dyn BufRead> = match Path::new(&file_path)
                             .extension()
@@ -391,7 +391,6 @@ fn main()  -> std::io::Result<()> {
         Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
         _           => Box::new(BufReader::new(file)), // plain text
     };
-
     // End - Open file
 
     // Loop variable initalization
