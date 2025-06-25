@@ -1,6 +1,7 @@
 
 // std
 use std::collections::HashMap;
+use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -309,19 +310,42 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
 
 // Serializer helpers
 
-// Format the object to a string in CSV format
-fn csv_to_string<T: Serialize>(to_format: &T) -> Result<String, serde_json::Error> {
-    let mut output = String::new();
+// Helper function to serialize a single record or iterable into CSV
+fn csv_to_string<T: Serialize>(value: &T) -> Result<String, Box<dyn Error>> {
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .terminator(csv::Terminator::Any(b' '))
+        .from_writer(vec![]);
 
-    // Finish filling out
+    // Attempt to serialize the value as a record or sequence of records
+    wtr.serialize(value)?;
+    wtr.flush()?;
 
-    Ok(output)
+    let data = wtr.into_inner()?;
+    Ok(String::from_utf8(data)?)
 }
 
-fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> Result<String, serde_json::Error> {
+fn csv_header_only<T: Serialize + Default>() -> Result<String, Box<dyn std::error::Error>> {
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(true)
+        .terminator(csv::Terminator::Any(b'\n'))
+        .from_writer(vec![]);
+
+    // Serialize a dummy value just to force the header generation
+    wtr.serialize(T::default())?;
+    wtr.flush()?;
+
+    let data = String::from_utf8(wtr.into_inner()?)?;
+
+    // Get only the first line (the header)
+    let header = data.lines().next().unwrap_or("").to_string();
+    Ok(header)
+}
+
+fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> Result<String, Box<dyn Error>> {
     match output_format {
-        OutputFormat::JsonPretty => serde_json::to_string_pretty(value),
-        OutputFormat::Json       => serde_json::to_string(value),
+        OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
+        OutputFormat::Json       => Ok(serde_json::to_string(value)?),
         OutputFormat::Csv        => csv_to_string(value),
     }
 }
@@ -336,7 +360,7 @@ fn main()  -> std::io::Result<()> {
         query = filter;
     }
 
-    let output_format: OutputFormat = OutputFormat::Json;
+    let output_format: OutputFormat = OutputFormat::Csv;
     let file_path = args.path;
 
 
@@ -363,7 +387,23 @@ fn main()  -> std::io::Result<()> {
     engine.register_fn("ip_in_cidr", ip_in_cidr);
 
     let mut record_count: u64 = 0;
+
+    // Print header
+    match output_format {
+        OutputFormat::Csv => {
+            // let dummy = NetflowRecord {
+            //     addr_dst, `addr_next_hop`, `addr_sampler
+            // }
+            // let header = csv_header_only(&dummy)?;
+            let header = "time_received_ns,sequence_num,time_flow_start_ns,time_flow_end_ns,etype,proto,bytes,packets,addr_src,addr_dst,addr_sampler,addr_next_hop,port_src,port_dst,mac_src,mac_dst,post_nat_src_ipv4_address,post_nat_dst_ipv4_address,post_napt_src_transport_port,post_napt_dst_transport_port";
+
+            println!("{}", header);
+        },
+        _ => (),
+    }
+
     // Loop through file
+
     while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
         // println!("Record length: {} => {}", count, record_length);
@@ -404,8 +444,8 @@ fn main()  -> std::io::Result<()> {
 
             match engine.eval_with_scope::<bool>(&mut scope, filter_expr) {
                 Ok(true) => {
-                    let json_str = output_serializer(&record, &output_format).unwrap();
-                    println!("{}", json_str);
+                    let output_str = output_serializer(&record, &output_format).unwrap();
+                    println!("{}", output_str);
                     record_count += 1;
                 },
                 Ok(false) => {},
@@ -413,8 +453,8 @@ fn main()  -> std::io::Result<()> {
             }
         } else {
             // No filter
-            let json_str = output_serializer(&record, &output_format).unwrap();
-            println!("{}", json_str);
+            let output_str = output_serializer(&record, &output_format).unwrap();
+            println!("{}", output_str);
             record_count += 1;
         }
 
