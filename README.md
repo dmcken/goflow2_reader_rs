@@ -41,3 +41,13 @@ Supported operators
 * `post_napt_src_transport_port == 57068 && post_nat_src_ipv4_address == "8.8.4.3"`
 
 
+## Output formats
+
+This program outputs a single line for each matching record to stdout.
+
+| Output format | Description |
+| ------------- | ----------- |
+| json-pretty | Multi-line pretty printed JSON object. |
+| json | Single-line json object. |
+| csv | Single-line CSV record. A header is printed once at the start. |
+| none | No record output, useful for counting records that match a filter before inspecting the records themselves. Doesn't surpress the "Searching for" or count lines. |

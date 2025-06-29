@@ -28,12 +28,13 @@ enum ProtobufValue {
     Fixed32(u32),
 }
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, ValueEnum, PartialEq)]
 #[allow(dead_code)]
 enum OutputFormat {
     JsonPretty,
     Json,
     Csv,
+    None,
 }
 
 impl fmt::Display for OutputFormat {
@@ -42,6 +43,7 @@ impl fmt::Display for OutputFormat {
             OutputFormat::JsonPretty => "json-pretty",
             OutputFormat::Json => "json",
             OutputFormat::Csv => "csv",
+            OutputFormat::None => "none",
         };
         write!(f, "{}", s)
     }
@@ -359,6 +361,7 @@ fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> R
         OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
         OutputFormat::Json       => Ok(serde_json::to_string(value)?),
         OutputFormat::Csv        => csv_to_string(value),
+        OutputFormat::None       => Ok(String::new()),
     }
 }
 
@@ -414,6 +417,7 @@ fn main()  -> std::io::Result<()> {
     }
 
     // Loop through file
+    let mut print_record: bool;
 
     while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
@@ -435,6 +439,7 @@ fn main()  -> std::io::Result<()> {
 
         let record = protobuf_to_record(parsed);
         // println!("Netflow struct: {:#?}", record);
+        print_record = true;
 
         if let Some(ref _filter_str) = args.filter {
             let mut scope = Scope::new();
@@ -455,18 +460,21 @@ fn main()  -> std::io::Result<()> {
 
             match engine.eval_with_scope::<bool>(&mut scope, filter_expr) {
                 Ok(true) => {
-                    let output_str = output_serializer(&record, &output_format).unwrap();
-                    println!("{}", output_str);
                     record_count += 1;
                 },
-                Ok(false) => {},
+                Ok(false) => {
+                    print_record = false;
+                },
                 Err(e) => eprintln!("Filter error: {e}"),
             }
         } else {
             // No filter
+            record_count += 1;
+        }
+
+        if print_record && output_format != OutputFormat::None {
             let output_str = output_serializer(&record, &output_format).unwrap();
             println!("{}", output_str);
-            record_count += 1;
         }
 
         if limit != 0 && record_count >= limit {
