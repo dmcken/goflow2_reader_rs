@@ -12,6 +12,7 @@ Rust goflow2 protobuf record reader.
 | f | filter | Filter records |
 | l | limit | Limit number of results, defaults to 0 which equals unlimited |
 | o | output | Output format to display |
+| <none> | no-frame | Omits the header "Searching for" and footer "Matched records: x" lines, useful for allowing output to be piped to other commands |
 
 ## Filters
 

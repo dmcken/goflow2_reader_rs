@@ -95,6 +95,10 @@ struct Args {
     #[arg(short,long, value_enum, default_value_t = OutputFormat::Json)]
     #[clap(help = "Output format")]
     output: OutputFormat,
+    /// Disable header & footer output, useful to pipe raw output to other tools.
+    #[arg(long = "frame", default_value_t = true, action = clap::ArgAction::SetTrue)]
+    #[arg(long = "no-frame", action = clap::ArgAction::SetFalse, overrides_with = "frame")]
+    frame: bool,
 }
 
 // Functions
@@ -326,16 +330,32 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
 
 // Helper function to serialize a single record or iterable into CSV
 fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String, Box<dyn Error>> {
-    let mut wtr = csv::WriterBuilder::new()
-        .has_headers(*print_header)
-        .terminator(csv::Terminator::Any(b' '))
-        .from_writer(vec![]);
+    let mut wtr: csv::Writer<Vec<u8>>;
+    if *print_header {
+        wtr = csv::WriterBuilder::new()
+            .from_writer(vec![]);
+    } else {
+        wtr = csv::WriterBuilder::new()
+            .has_headers(false)
+            .terminator(csv::Terminator::Any(b' '))
+            .from_writer(vec![]);
+    }
 
     // Attempt to serialize the value as a record or sequence of records
     wtr.serialize(value)?;
     wtr.flush()?;
 
-    let data = wtr.into_inner()?;
+    let mut data = wtr.into_inner()?;
+
+    // Trim trailing newline after the data record.
+    if *print_header {
+        if data.ends_with(b"\r\n") {
+            data.truncate(data.len() - 2);
+        } else if data.ends_with(b"\n") {
+            data.truncate(data.len() - 1);
+        }
+    }
+
     Ok(String::from_utf8(data)?)
 }
 
@@ -365,7 +385,9 @@ fn main()  -> std::io::Result<()> {
     let file_path = args.path;
     // End - CLI Params
 
-    println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
+    if args.frame {
+        println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
+    }
 
     // Start - Open file
     let file = File::open(&file_path)?;
@@ -411,6 +433,7 @@ fn main()  -> std::io::Result<()> {
         // println!("Netflow struct: {:#?}", record);
         print_record = true;
 
+        // Filter check
         if let Some(ref _filter_str) = args.filter {
             let mut scope = Scope::new();
 
@@ -456,7 +479,9 @@ fn main()  -> std::io::Result<()> {
         }
     }
 
-    println!("Matched records: {}", record_count);
+    if args.frame {
+        println!("Matched records: {}", record_count);
+    }
 
     Ok(())
 }
