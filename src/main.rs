@@ -1,4 +1,6 @@
 
+
+
 // std
 use std::collections::HashMap;
 use std::error::Error;
@@ -7,6 +9,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::Path;
+use std::process::{Command, Stdio};
 
 // External
 use bzip2::read::BzDecoder;
@@ -397,6 +400,18 @@ fn main()  -> std::io::Result<()> {
     {
         Some("bz2") => Box::new(BufReader::new(BzDecoder::new(file))),
         Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
+        Some("7z") => {
+            let child = Command::new("7z")
+                .arg("e")                         // Extract
+                .arg("-so")                       // Write output to stdout
+                .arg(file_path)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to spawn 7z");
+
+            let stdout = child.stdout.expect("Failed to capture 7z stdout");
+            Box::new(BufReader::new(stdout))
+        },
         _           => Box::new(BufReader::new(file)), // plain text
     };
     // End - Open file
