@@ -325,9 +325,9 @@ fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
 // Serializer helpers
 
 // Helper function to serialize a single record or iterable into CSV
-fn csv_to_string<T: Serialize>(value: &T) -> Result<String, Box<dyn Error>> {
+fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String, Box<dyn Error>> {
     let mut wtr = csv::WriterBuilder::new()
-        .has_headers(false)
+        .has_headers(*print_header)
         .terminator(csv::Terminator::Any(b' '))
         .from_writer(vec![]);
 
@@ -356,11 +356,11 @@ fn csv_header_only<T: Serialize + Default>() -> Result<String, Box<dyn std::erro
     Ok(header)
 }
 
-fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat) -> Result<String, Box<dyn Error>> {
+fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat, first_record: &bool) -> Result<String, Box<dyn Error>> {
     match output_format {
         OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
         OutputFormat::Json       => Ok(serde_json::to_string(value)?),
-        OutputFormat::Csv        => csv_to_string(value),
+        OutputFormat::Csv        => csv_to_string(value, &first_record),
         OutputFormat::None       => Ok(String::new()),
     }
 }
@@ -402,25 +402,9 @@ fn main()  -> std::io::Result<()> {
 
     let mut record_count: u64 = 0;
 
-    // Print header
-    // Ugly hack, should look for some way to signal to the output serializer
-    // that this is the first row. Trying to build a dummy record is annoying
-    // and only going to get worse as fields are added.
-    match output_format {
-        OutputFormat::Csv => {
-            // let dummy = NetflowRecord {
-            //     addr_dst, `addr_next_hop`, `addr_sampler
-            // }
-            // let header = csv_header_only(&dummy)?;
-            let header = "time_received_ns,sequence_num,time_flow_start_ns,time_flow_end_ns,etype,proto,bytes,packets,addr_src,addr_dst,addr_sampler,addr_next_hop,port_src,port_dst,mac_src,mac_dst,post_nat_src_ipv4_address,post_nat_dst_ipv4_address,post_napt_src_transport_port,post_napt_dst_transport_port";
-
-            println!("{}", header);
-        },
-        _ => (),
-    }
-
     // Loop through file
     let mut print_record: bool;
+    let mut first_record: bool = true;
 
     while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
@@ -476,8 +460,12 @@ fn main()  -> std::io::Result<()> {
         }
 
         if print_record && output_format != OutputFormat::None {
-            let output_str = output_serializer(&record, &output_format).unwrap();
+            let output_str = output_serializer(&record, &output_format, &first_record).unwrap();
             println!("{}", output_str);
+            if first_record == true {
+                first_record = false;
+            }
+
         }
 
         if limit != 0 && record_count >= limit {
