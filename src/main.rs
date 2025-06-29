@@ -339,23 +339,6 @@ fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String,
     Ok(String::from_utf8(data)?)
 }
 
-fn csv_header_only<T: Serialize + Default>() -> Result<String, Box<dyn std::error::Error>> {
-    let mut wtr = csv::WriterBuilder::new()
-        .has_headers(true)
-        .terminator(csv::Terminator::Any(b'\n'))
-        .from_writer(vec![]);
-
-    // Serialize a dummy value just to force the header generation
-    wtr.serialize(T::default())?;
-    wtr.flush()?;
-
-    let data = String::from_utf8(wtr.into_inner()?)?;
-
-    // Get only the first line (the header)
-    let header = data.lines().next().unwrap_or("").to_string();
-    Ok(header)
-}
-
 fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat, first_record: &bool) -> Result<String, Box<dyn Error>> {
     match output_format {
         OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
