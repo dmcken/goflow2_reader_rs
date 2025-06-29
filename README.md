@@ -41,6 +41,13 @@ Supported operators
 * `ip_in_cidr(addr_src,"10.1.0.0/16")`
 * `post_napt_src_transport_port == 57068 && post_nat_src_ipv4_address == "8.8.4.3"`
 
+## Input formats
+
+Protobuf files can be read in their raw form or compressed with any of the following (automatically detected from the file extension). Support is purely for decompression so all variants should be supported (raise an issue if you find one that doesn't work).
+
+* 7z - Support currently via 7z subprocess. I have to look at sevenz-rust2.
+* bz2
+* xz
 
 ## Output formats
 
