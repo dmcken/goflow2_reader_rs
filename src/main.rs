@@ -403,6 +403,9 @@ fn main()  -> std::io::Result<()> {
     let mut record_count: u64 = 0;
 
     // Print header
+    // Ugly hack, should look for some way to signal to the output serializer
+    // that this is the first row. Trying to build a dummy record is annoying
+    // and only going to get worse as fields are added.
     match output_format {
         OutputFormat::Csv => {
             // let dummy = NetflowRecord {
