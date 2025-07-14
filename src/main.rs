@@ -442,6 +442,8 @@ fn main()  -> std::io::Result<()> {
     // Loop through file
     while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
+        // Start - Read and parse protobuf
+
         // println!("Record length: {} => {}", count, record_length);
 
         // A record separator can be omited, make this optional
@@ -460,6 +462,8 @@ fn main()  -> std::io::Result<()> {
 
         let record = protobuf_to_record(parsed);
         // println!("Netflow struct: {:#?}", record);
+
+        // End - Read and parse protobuf
 
         // Filter check
         if let Some(ref _filter_str) = args.filter {
