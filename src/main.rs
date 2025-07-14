@@ -44,9 +44,9 @@ impl fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             OutputFormat::JsonPretty => "json-pretty",
-            OutputFormat::Json => "json",
-            OutputFormat::Csv => "csv",
-            OutputFormat::None => "none",
+            OutputFormat::Json       => "json",
+            OutputFormat::Csv        => "csv",
+            OutputFormat::None       => "none",
         };
         write!(f, "{}", s)
     }
@@ -114,6 +114,7 @@ impl NetflowRecord {
     fn addr_dst_str(&self) -> String {   self.addr_dst.to_string()  }
 }
 
+// CLI interface
 #[derive(Parser, Debug)]
 #[clap(about = "Load and print binary protobuf files created by goflow2.")]
 struct Args {
