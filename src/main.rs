@@ -437,11 +437,10 @@ fn main()  -> std::io::Result<()> {
     engine.register_fn("ip_in_cidr", ip_in_cidr);
 
     let mut record_count: u64 = 0;
-
-    // Loop through file
     let mut print_record: bool;
     let mut first_record: bool = true;
 
+    // Loop through file
     while let Some(record_length) = read_varint_reader(&mut input_handle) {
 
         // println!("Record length: {} => {}", count, record_length);
