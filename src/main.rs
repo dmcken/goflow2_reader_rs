@@ -437,7 +437,6 @@ fn main()  -> std::io::Result<()> {
     engine.register_fn("ip_in_cidr", ip_in_cidr);
 
     let mut record_count: u64 = 0;
-    let mut print_record: bool;
     let mut first_record: bool = true;
 
     // Loop through file
@@ -461,7 +460,6 @@ fn main()  -> std::io::Result<()> {
 
         let record = protobuf_to_record(parsed);
         // println!("Netflow struct: {:#?}", record);
-        print_record = true;
 
         // Filter check
         if let Some(ref _filter_str) = args.filter {
@@ -474,7 +472,9 @@ fn main()  -> std::io::Result<()> {
             scope.push("addr_src", record.addr_src_str());
             scope.push("addr_dst", record.addr_dst_str());
             scope.push("post_nat_src_ipv4_address", option_ip(record.post_nat_src_ipv4_address));
+            scope.push("post_nat_dst_ipv4_address", option_ip(record.post_nat_dst_ipv4_address));
             scope.push("post_napt_src_transport_port", option_u16(record.post_napt_src_transport_port));
+            scope.push("post_napt_dst_transport_port", option_u16(record.post_napt_dst_transport_port));
             scope.push("time_flow_start_ns", option_dt(Some(record.time_flow_start_ns)));
             // TODO: Finish adding fields
 
@@ -486,16 +486,14 @@ fn main()  -> std::io::Result<()> {
                 .unwrap_or("true"); // default: no filtering
 
             match engine.eval_with_scope::<bool>(&mut scope, filter_expr) {
-                Ok(true)  => { record_count += 1;    },
-                Ok(false) => { print_record = false; },
+                Ok(true)  => { },
+                Ok(false) => { continue; },
                 Err(e) => { eprintln!("Filter error: {e}") },
             }
-        } else {
-            // No filter
-            record_count += 1;
         }
 
-        if print_record && output_format != OutputFormat::None {
+        // Print record
+        if output_format != OutputFormat::None {
             let output_str = output_serializer(&record, &output_format, &first_record).unwrap();
             println!("{}", output_str);
             if first_record == true {
@@ -504,6 +502,7 @@ fn main()  -> std::io::Result<()> {
         }
 
         // Check for limit
+        record_count += 1;
         if limit != 0 && record_count >= limit {
             break;
         }
