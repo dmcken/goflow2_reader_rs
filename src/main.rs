@@ -467,6 +467,8 @@ fn main()  -> std::io::Result<()> {
         if let Some(ref _filter_str) = args.filter {
             let mut scope = Scope::new();
 
+            // Start - Push search fields
+
             scope.push("bytes", record.bytes());
             scope.push("proto", record.proto());
             scope.push("addr_src", record.addr_src_str());
@@ -476,19 +478,17 @@ fn main()  -> std::io::Result<()> {
             scope.push("time_flow_start_ns", option_dt(Some(record.time_flow_start_ns)));
             // TODO: Finish adding fields
 
+            // End - Push search fields
+
             let filter_expr = args
                 .filter
                 .as_deref()
                 .unwrap_or("true"); // default: no filtering
 
             match engine.eval_with_scope::<bool>(&mut scope, filter_expr) {
-                Ok(true) => {
-                    record_count += 1;
-                },
-                Ok(false) => {
-                    print_record = false;
-                },
-                Err(e) => eprintln!("Filter error: {e}"),
+                Ok(true)  => { record_count += 1;    },
+                Ok(false) => { print_record = false; },
+                Err(e) => { eprintln!("Filter error: {e}") },
             }
         } else {
             // No filter
@@ -501,9 +501,9 @@ fn main()  -> std::io::Result<()> {
             if first_record == true {
                 first_record = false;
             }
-
         }
 
+        // Check for limit
         if limit != 0 && record_count >= limit {
             break;
         }
