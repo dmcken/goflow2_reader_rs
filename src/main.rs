@@ -52,7 +52,7 @@ impl fmt::Display for OutputFormat {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 struct NetflowRecord {
     time_received_ns: DateTime<Utc>,
     sequence_num: u64,
@@ -75,8 +75,39 @@ struct NetflowRecord {
     post_napt_src_transport_port: Option<u16>,
     post_napt_dst_transport_port: Option<u16>,
 }
+impl Default for NetflowRecord {
+    fn default() -> Self {
+        let default_time = Utc.timestamp_opt(0, 0).unwrap(); // 1970-01-01T00:00:00Z
+        let default_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
+        NetflowRecord {
+            time_received_ns: default_time,
+            sequence_num: 0,
+            time_flow_start_ns: default_time,
+            time_flow_end_ns: default_time,
+            etype: 0,
+            proto: 0,
+            bytes: 0,
+            packets: 0,
+            addr_src: default_ip,
+            addr_dst: default_ip,
+            addr_sampler: default_ip,
+            addr_next_hop: default_ip,
+            port_src: 0,
+            port_dst: 0,
+            mac_src: None,
+            mac_dst: None,
+            post_nat_src_ipv4_address: None,
+            post_nat_dst_ipv4_address: None,
+            post_napt_src_transport_port: None,
+            post_napt_dst_transport_port: None,
+        }
+    }
+}
 impl NetflowRecord {
+    pub fn new_with_defaults() -> Self {
+        Self::default()
+    }
     fn proto(&self) -> i64           {   self.proto as i64          }
     fn bytes(&self) -> i64           {   self.bytes as i64          }
     fn addr_src_str(&self) -> String {   self.addr_src.to_string()  }
@@ -227,30 +258,8 @@ fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
 }
 
 fn protobuf_to_record(parsed: HashMap<u32, ProtobufValue>) -> NetflowRecord {
-    let now = Utc::now();
-    let ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-    let mut record: NetflowRecord = NetflowRecord {
-        time_received_ns: now,
-        sequence_num: 0,
-        time_flow_start_ns: now,
-        time_flow_end_ns: now,
-        etype: 0x0000,
-        proto: 0,
-        bytes: 0,
-        packets: 0,
-        addr_src: ip,
-        addr_dst: ip,
-        addr_sampler: ip,
-        addr_next_hop: ip,
-        port_src: 0,
-        port_dst: 0,
-        mac_src: None,
-        mac_dst: None,
-        post_nat_src_ipv4_address: None,
-        post_nat_dst_ipv4_address: None,
-        post_napt_src_transport_port: None,
-        post_napt_dst_transport_port: None,
-    };
+    let mut record = NetflowRecord::new_with_defaults();
+
     // https://github.com/netsampler/goflow2/blob/main/pb/flow.proto
     for (field, value) in parsed {
         // println!("Field {} => {:?}", field, value);
