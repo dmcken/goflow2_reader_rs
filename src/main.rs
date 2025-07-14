@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read};
+use std::io::{self,BufRead, BufReader, Cursor, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -381,6 +381,34 @@ fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat, firs
     }
 }
 
+fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
+
+    let file = File::open(&file_path)?;
+    let input_handle: Box<dyn BufRead> = match Path::new(&file_path)
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+    {
+        Some("bz2") => Box::new(BufReader::new(BzDecoder::new(file))),
+        Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
+        Some("7z") => {
+            let child = Command::new("7z")
+                .arg("e")                         // Extract
+                .arg("-so")                       // Write output to stdout
+                .arg(file_path)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to spawn 7z");
+
+            let stdout = child.stdout.expect("Failed to capture 7z stdout");
+            Box::new(BufReader::new(stdout))
+        },
+        _           => Box::new(BufReader::new(file)), // plain text
+    };
+
+    Ok(input_handle)
+
+}
+
 fn main()  -> std::io::Result<()> {
 
     // TODO - The Start / End sections should be their own functions.
@@ -402,29 +430,7 @@ fn main()  -> std::io::Result<()> {
         println!("Searching for '{query}' in '{file_path}' returning at most '{limit}' results");
     }
 
-    // Start - Open file
-    let file = File::open(&file_path)?;
-    let mut input_handle: Box<dyn BufRead> = match Path::new(&file_path)
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-    {
-        Some("bz2") => Box::new(BufReader::new(BzDecoder::new(file))),
-        Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
-        Some("7z") => {
-            let child = Command::new("7z")
-                .arg("e")                         // Extract
-                .arg("-so")                       // Write output to stdout
-                .arg(file_path)
-                .stdout(Stdio::piped())
-                .spawn()
-                .expect("Failed to spawn 7z");
-
-            let stdout = child.stdout.expect("Failed to capture 7z stdout");
-            Box::new(BufReader::new(stdout))
-        },
-        _           => Box::new(BufReader::new(file)), // plain text
-    };
-    // End - Open file
+    let mut input_handle = open_file(&file_path)?;
 
     // Loop variable initalization
     let mut engine = Engine::new();
