@@ -1,6 +1,6 @@
 
 // std
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 // External
 use chrono::{DateTime, TimeZone, Utc};
@@ -92,3 +92,34 @@ pub fn ip_in_cidr(ip_str: &str, cidr_str: &str) -> bool {
     }
 }
 
+/// Converts a `Vec<u8>` into an `IpAddr` if it represents a valid IPv4 or IPv6 address.
+///
+/// # Arguments
+///
+/// * `bytes` - A vector of bytes representing either an IPv4 (4 bytes) or IPv6 (16 bytes) address.
+///
+/// # Returns
+///
+/// * `Some(IpAddr)` if the input is exactly 4 or 16 bytes long, corresponding to a valid IPv4 or IPv6 address.
+/// * `None` if the input is not a valid length for an IP address.
+///
+/// # Examples
+///
+/// ```
+/// use std::net::{IpAddr, Ipv4Addr};
+/// let ip = gf2_reader::vec_to_ip_addr(vec![127, 0, 0, 1]);
+/// assert_eq!(ip, Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+/// ```
+pub fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
+    match bytes.len() {
+        4 => {
+            let arr: [u8; 4] = bytes.try_into().ok()?;
+            Some(IpAddr::V4(Ipv4Addr::from(arr)))
+        }
+        16 => {
+            let arr: [u8; 16] = bytes.try_into().ok()?;
+            Some(IpAddr::V6(Ipv6Addr::from(arr)))
+        }
+        _ => None,
+    }
+}
