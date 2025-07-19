@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self,BufRead, BufReader, Read};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -25,20 +24,6 @@ mod protobuf;
 // Functions
 
 // My helpers
-fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
-    match bytes.len() {
-        4 => {
-            let arr: [u8; 4] = bytes.try_into().ok()?;
-            Some(IpAddr::V4(Ipv4Addr::from(arr)))
-        }
-        16 => {
-            let arr: [u8; 16] = bytes.try_into().ok()?;
-            Some(IpAddr::V6(Ipv6Addr::from(arr)))
-        }
-        _ => None,
-    }
-}
-
 fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_record::NetflowRecord {
     let mut record = netflow_record::NetflowRecord::new_with_defaults();
 
@@ -49,24 +34,24 @@ fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_
             1 => (), // Don't care which flow protocol
             4 => if let protobuf::ProtobufValue::Varint(v) = value { record.sequence_num = v; },
             6 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.addr_src = ip;
                 }
             },
             7 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.addr_dst = ip;
                 }
             },
             9   => if let protobuf::ProtobufValue::Varint(v) = value { record.bytes = v;   },
             10  => if let protobuf::ProtobufValue::Varint(v) = value { record.packets = v; },
             11 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.addr_sampler = ip;
                 }
             },
             12 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.addr_next_hop = ip;
                 }
             },
@@ -98,12 +83,12 @@ fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_
                 record.time_flow_end_ns = Utc.timestamp_opt(seconds as i64, nanos as u32).unwrap();
             },
             2225 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.post_nat_src_ipv4_address = Some(ip);
                 }
             },
             2226 => if let protobuf::ProtobufValue::LengthDelimited(v) = value {
-                if let Some(ip) = vec_to_ip_addr(v) {
+                if let Some(ip) = netflow_record::vec_to_ip_addr(v) {
                     record.post_nat_dst_ipv4_address = Some(ip);
                 }
             },
@@ -121,43 +106,11 @@ fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_
 }
 
 // Serializer helpers
-
-// Helper function to serialize a single record or iterable into CSV
-fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String, Box<dyn Error>> {
-    let mut wtr: csv::Writer<Vec<u8>>;
-    if *print_header {
-        wtr = csv::WriterBuilder::new()
-            .from_writer(vec![]);
-    } else {
-        wtr = csv::WriterBuilder::new()
-            .has_headers(false)
-            .terminator(csv::Terminator::Any(b' '))
-            .from_writer(vec![]);
-    }
-
-    // Attempt to serialize the value as a record or sequence of records
-    wtr.serialize(value)?;
-    wtr.flush()?;
-
-    let mut data = wtr.into_inner()?;
-
-    // Trim trailing newline after the data record.
-    if *print_header {
-        if data.ends_with(b"\r\n") {
-            data.truncate(data.len() - 2);
-        } else if data.ends_with(b"\n") {
-            data.truncate(data.len() - 1);
-        }
-    }
-
-    Ok(String::from_utf8(data)?)
-}
-
 fn output_serializer<T: Serialize>(value: &T, output_format: &cli::OutputFormat, first_record: &bool) -> Result<String, Box<dyn Error>> {
     match output_format {
         cli::OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
         cli::OutputFormat::Json       => Ok(serde_json::to_string(value)?),
-        cli::OutputFormat::Csv        => csv_to_string(value, first_record),
+        cli::OutputFormat::Csv        => cli::csv_to_string(value, first_record),
         cli::OutputFormat::None       => Ok(String::new()),
     }
 }
@@ -187,7 +140,6 @@ fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
     };
 
     Ok(input_handle)
-
 }
 
 fn main()  -> std::io::Result<()> {
