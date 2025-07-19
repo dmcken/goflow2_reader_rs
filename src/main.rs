@@ -3,7 +3,6 @@
 // std
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt;
 use std::fs::File;
 use std::io::{self,BufRead, BufReader, Read};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -12,148 +11,18 @@ use std::process::{Command, Stdio};
 
 // External
 use bzip2::read::BzDecoder;
-use chrono::{DateTime, TimeZone, Utc};
-use clap::{Parser,ValueEnum};
-use ipnet::IpNet;
+use chrono::{TimeZone, Utc};
+use clap::Parser;
 use rhai::{Engine, Scope};
 use serde::Serialize;
 use xz::read::XzDecoder;
 
 // Local
+mod cli;
+mod netflow_record;
 mod protobuf;
 
-// Data structures
-
-#[derive(Clone, Debug, ValueEnum, PartialEq)]
-#[allow(dead_code)]
-enum OutputFormat {
-    JsonPretty,
-    Json,
-    Csv,
-    None,
-}
-
-impl fmt::Display for OutputFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            OutputFormat::JsonPretty => "json-pretty",
-            OutputFormat::Json       => "json",
-            OutputFormat::Csv        => "csv",
-            OutputFormat::None       => "none",
-        };
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(Serialize, Debug, PartialEq)]
-struct NetflowRecord {
-    time_received_ns: DateTime<Utc>,
-    sequence_num: u64,
-    time_flow_start_ns: DateTime<Utc>,
-    time_flow_end_ns: DateTime<Utc>,
-    etype: u16,
-    proto: u16,
-    bytes: u64,
-    packets: u64,
-    addr_src: IpAddr,
-    addr_dst: IpAddr,
-    addr_sampler: IpAddr,
-    addr_next_hop: IpAddr,
-    port_src: u16,
-    port_dst: u16,
-    mac_src: Option<u64>,
-    mac_dst: Option<u64>,
-    post_nat_src_ipv4_address: Option<IpAddr>,
-    post_nat_dst_ipv4_address: Option<IpAddr>,
-    post_napt_src_transport_port: Option<u16>,
-    post_napt_dst_transport_port: Option<u16>,
-}
-impl Default for NetflowRecord {
-    fn default() -> Self {
-        let default_time = Utc.timestamp_opt(0, 0).unwrap(); // 1970-01-01T00:00:00Z
-        let default_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-
-        NetflowRecord {
-            time_received_ns: default_time,
-            sequence_num: 0,
-            time_flow_start_ns: default_time,
-            time_flow_end_ns: default_time,
-            etype: 0,
-            proto: 0,
-            bytes: 0,
-            packets: 0,
-            addr_src: default_ip,
-            addr_dst: default_ip,
-            addr_sampler: default_ip,
-            addr_next_hop: default_ip,
-            port_src: 0,
-            port_dst: 0,
-            mac_src: None,
-            mac_dst: None,
-            post_nat_src_ipv4_address: None,
-            post_nat_dst_ipv4_address: None,
-            post_napt_src_transport_port: None,
-            post_napt_dst_transport_port: None,
-        }
-    }
-}
-impl NetflowRecord {
-    pub fn new_with_defaults() -> Self {
-        Self::default()
-    }
-    fn proto(&self) -> i64           {   self.proto as i64          }
-    fn bytes(&self) -> i64           {   self.bytes as i64          }
-    fn addr_src_str(&self) -> String {   self.addr_src.to_string()  }
-    fn addr_dst_str(&self) -> String {   self.addr_dst.to_string()  }
-}
-
-// CLI interface
-#[derive(Parser, Debug)]
-#[clap(about = "Load and print binary protobuf files created by goflow2.")]
-struct Args {
-    #[arg(short,long)]
-    #[clap(help = "File to load")]
-    path: String,
-    #[arg(short,long)]
-    #[clap(help = "Filter of what records to display")]
-    filter: Option<String>,
-    #[arg(short,long)]
-    #[clap(help = "Limit number of results to display")]
-    limit: Option<u64>,
-    #[arg(short,long, value_enum, default_value_t = OutputFormat::Json)]
-    #[clap(help = "Output format")]
-    output: OutputFormat,
-    /// Disable header & footer output, useful to pipe raw output to other tools.
-    #[arg(long = "frame", default_value_t = true, action = clap::ArgAction::SetTrue)]
-    #[arg(long = "no-frame", action = clap::ArgAction::SetFalse, overrides_with = "frame")]
-    frame: bool,
-}
-
 // Functions
-
-// rhai helpers
-fn option_ip(ip: Option<IpAddr>) -> String {
-    ip.map(|v| v.to_string()).unwrap_or_default()
-}
-
-fn option_u16(v: Option<u16>) -> i64 {
-    v.map(|v| v as i64).unwrap_or(-1)
-}
-
-fn option_dt(dt: Option<DateTime<Utc>>) -> i64 {
-    dt.map(|v| v.timestamp()).unwrap_or(0)
-}
-
-fn ip_in_cidr(ip_str: &str, cidr_str: &str) -> bool {
-    match (ip_str.parse::<IpAddr>(), cidr_str.parse::<IpNet>()) {
-        (Ok(ip), Ok(net)) => net.contains(&ip),
-        _ => false,
-    }
-}
-
-// Protobuf helpers
-
-
 
 // My helpers
 fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
@@ -170,8 +39,8 @@ fn vec_to_ip_addr(bytes: Vec<u8>) -> Option<IpAddr> {
     }
 }
 
-fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> NetflowRecord {
-    let mut record = NetflowRecord::new_with_defaults();
+fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_record::NetflowRecord {
+    let mut record = netflow_record::NetflowRecord::new_with_defaults();
 
     // https://github.com/netsampler/goflow2/blob/main/pb/flow.proto
     for (field, value) in parsed {
@@ -284,18 +153,18 @@ fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String,
     Ok(String::from_utf8(data)?)
 }
 
-fn output_serializer<T: Serialize>(value: &T, output_format: &OutputFormat, first_record: &bool) -> Result<String, Box<dyn Error>> {
+fn output_serializer<T: Serialize>(value: &T, output_format: &cli::OutputFormat, first_record: &bool) -> Result<String, Box<dyn Error>> {
     match output_format {
-        OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
-        OutputFormat::Json       => Ok(serde_json::to_string(value)?),
-        OutputFormat::Csv        => csv_to_string(value, &first_record),
-        OutputFormat::None       => Ok(String::new()),
+        cli::OutputFormat::JsonPretty => Ok(serde_json::to_string_pretty(value)?),
+        cli::OutputFormat::Json       => Ok(serde_json::to_string(value)?),
+        cli::OutputFormat::Csv        => csv_to_string(value, first_record),
+        cli::OutputFormat::None       => Ok(String::new()),
     }
 }
 
 fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
 
-    let file = File::open(&file_path)?;
+    let file = File::open(file_path)?;
     let input_handle: Box<dyn BufRead> = match Path::new(&file_path)
                             .extension()
                             .and_then(|ext| ext.to_str())
@@ -326,7 +195,7 @@ fn main()  -> std::io::Result<()> {
     // TODO - The Start / End sections should be their own functions.
 
     // Start - CLI Params
-    let args = Args::parse();
+    let args = cli::Args::parse();
 
     let mut query: &str = "blank";
     let limit: u64 = args.limit.unwrap_or(0);
@@ -334,7 +203,7 @@ fn main()  -> std::io::Result<()> {
         query = filter;
     }
 
-    let output_format: OutputFormat = args.output;
+    let output_format: cli::OutputFormat = args.output;
     let file_path = args.path;
     // End - CLI Params
 
@@ -346,7 +215,7 @@ fn main()  -> std::io::Result<()> {
 
     // Loop variable initalization
     let mut engine = Engine::new();
-    engine.register_fn("ip_in_cidr", ip_in_cidr);
+    engine.register_fn("ip_in_cidr", netflow_record::ip_in_cidr);
 
     let mut record_count: u64 = 0;
     let mut first_record: bool = true;
@@ -387,11 +256,11 @@ fn main()  -> std::io::Result<()> {
             scope.push("proto", record.proto());
             scope.push("addr_src", record.addr_src_str());
             scope.push("addr_dst", record.addr_dst_str());
-            scope.push("post_nat_src_ipv4_address", option_ip(record.post_nat_src_ipv4_address));
-            scope.push("post_nat_dst_ipv4_address", option_ip(record.post_nat_dst_ipv4_address));
-            scope.push("post_napt_src_transport_port", option_u16(record.post_napt_src_transport_port));
-            scope.push("post_napt_dst_transport_port", option_u16(record.post_napt_dst_transport_port));
-            scope.push("time_flow_start_ns", option_dt(Some(record.time_flow_start_ns)));
+            scope.push("post_nat_src_ipv4_address", netflow_record::option_ip(record.post_nat_src_ipv4_address));
+            scope.push("post_nat_dst_ipv4_address", netflow_record::option_ip(record.post_nat_dst_ipv4_address));
+            scope.push("post_napt_src_transport_port", netflow_record::option_u16(record.post_napt_src_transport_port));
+            scope.push("post_napt_dst_transport_port", netflow_record::option_u16(record.post_napt_dst_transport_port));
+            scope.push("time_flow_start_ns", netflow_record::option_dt(Some(record.time_flow_start_ns)));
             // TODO: Finish adding fields
 
             // End - Push search fields
@@ -409,10 +278,10 @@ fn main()  -> std::io::Result<()> {
         }
 
         // Print record
-        if output_format != OutputFormat::None {
+        if output_format != cli::OutputFormat::None {
             let output_str = output_serializer(&record, &output_format, &first_record).unwrap();
             println!("{}", output_str);
-            if first_record == true {
+            if first_record {
                 first_record = false;
             }
         }
