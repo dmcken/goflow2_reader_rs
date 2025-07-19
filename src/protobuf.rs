@@ -9,7 +9,6 @@ use serde::Serialize;
 
 // Enums
 #[derive(Debug, Serialize)]
-#[allow(dead_code)]
 pub enum ProtobufValue {
     Varint(u64),
     Fixed64(u64),
