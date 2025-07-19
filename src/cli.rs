@@ -51,7 +51,57 @@ pub struct Args {
     pub frame: bool,
 }
 
-// Helper function to serialize a single record or iterable into CSV
+/// Serializes a value to a CSV-formatted `String`.
+///
+/// This function uses the [`csv`] crate to serialize any type that implements [`serde::Serialize`]
+/// into a CSV string. You can choose whether or not to include a header row.
+///
+/// # Type Parameters
+///
+/// * `T` – A type that implements [`serde::Serialize`].
+///
+/// # Arguments
+///
+/// * `value` – A reference to the value to serialize. This can be a single record (e.g., a struct)
+///   or a sequence of records (e.g., a slice or vector of structs).
+/// * `print_header` – Whether to include a header row in the CSV output.
+///
+/// # Returns
+///
+/// A `Result` containing the CSV data as a `String` on success, or a boxed `dyn Error` if
+/// serialization or UTF-8 conversion fails.
+///
+/// # Behavior
+///
+/// - If `print_header` is `false`, no header row is included, and a custom space (`' '`) terminator is used.
+/// - If `print_header` is `true`, a standard header row and newline terminator are included.
+/// - The trailing newline (if present) is trimmed from the output for cleaner formatting.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Serialization via `csv::Writer::serialize()` fails
+/// - The internal writer cannot be flushed
+/// - The resulting byte buffer cannot be converted to a UTF-8 string
+///
+/// # Examples
+///
+/// ```
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct Record {
+///     name: String,
+///     age: u8,
+/// }
+///
+/// let data = Record { name: "Alice".into(), age: 30 };
+/// let csv = gf2_reader::csv_to_string(&data, &true).unwrap();
+/// assert_eq!(csv, "name,age\nAlice,30");
+/// ```
+///
+/// [`csv`]: https://docs.rs/csv
+/// [`serde::Serialize`]: https://docs.rs/serde/latest/serde/trait.Serialize.html
 pub fn csv_to_string<T: Serialize>(value: &T, print_header: &bool) -> Result<String, Box<dyn Error>> {
     let mut wtr: csv::Writer<Vec<u8>>;
     if *print_header {
