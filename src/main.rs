@@ -23,7 +23,6 @@ mod protobuf;
 
 // Functions
 
-// My helpers
 fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_record::NetflowRecord {
     let mut record = netflow_record::NetflowRecord::new_with_defaults();
 
