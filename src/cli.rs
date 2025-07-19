@@ -11,10 +11,10 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, ValueEnum, PartialEq)]
 pub enum OutputFormat {
-    JsonPretty,
-    Json,
-    Csv,
-    None,
+    JsonPretty,   // Pretty-print multi-line JSON
+    Json,         // Single line JSON
+    Csv,          // Comma-separated values
+    None,         // No output
 }
 impl fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
