@@ -49,6 +49,10 @@ pub struct Args {
     #[arg(long = "frame", default_value_t = true, action = clap::ArgAction::SetTrue)]
     #[arg(long = "no-frame", action = clap::ArgAction::SetFalse, overrides_with = "frame")]
     pub frame: bool,
+
+    // Filename of ip2asn tsv database
+    #[arg(long)]
+    pub ipasn: Option<String>,
 }
 
 /// Serializes a value to a CSV-formatted `String`.

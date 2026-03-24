@@ -12,6 +12,8 @@ use std::process::{Command, Stdio};
 use bzip2::read::BzDecoder;
 use chrono::{TimeZone, Utc};
 use clap::Parser;
+use ip2asn::{Builder,IpAsnMap};
+use ipnet::{IpNet, Ipv6Net};
 use rhai::{Engine, Scope};
 use serde::Serialize;
 use xz::read::XzDecoder;
@@ -24,7 +26,7 @@ mod protobuf;
 
 // Functions
 
-fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_record::NetflowRecord {
+fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>, ipasn: &Option<IpAsnMap>) -> netflow_record::NetflowRecord {
     let mut record = netflow_record::NetflowRecord::new_with_defaults();
 
     // https://github.com/netsampler/goflow2/blob/main/pb/flow.proto
@@ -102,6 +104,15 @@ fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>) -> netflow_
         }
     }
 
+    if let Some(map) = ipasn.as_ref() {
+        if let Some(info) = map.lookup(record.addr_src) {
+            record.asn_src = Some(info.asn);
+        }
+        if let Some(info) = map.lookup(record.addr_dst) {
+            record.asn_dst = Some(info.asn);
+        }
+    }
+
     record
 }
 
@@ -145,7 +156,16 @@ fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
     Ok(input_handle)
 }
 
-fn main()  -> std::io::Result<()> {
+fn load_ip_asn_map(path: &str) -> Result<IpAsnMap, Box<dyn std::error::Error>> {
+    // Open the .gz file
+    let map = Builder::new()
+        .from_path(path)?
+        .build()?;
+
+    Ok(map)
+}
+
+fn main()  -> Result<(), Box<dyn Error>>  {
 
     // TODO - The Start / End sections should be their own functions.
 
@@ -160,6 +180,13 @@ fn main()  -> std::io::Result<()> {
 
     let output_format: cli::OutputFormat = args.output;
     let file_path = args.path;
+
+    // If a database is specified then load it
+    let ipasn: Option<IpAsnMap> = args.ipasn
+        .as_deref()
+        .map(|path| load_ip_asn_map(path))
+        .transpose()?; // converts Option<Result<T,E>> -> Result<Option<T>,E>
+
     // End - CLI Params
 
     if args.frame {
@@ -196,7 +223,7 @@ fn main()  -> std::io::Result<()> {
         let parsed = protobuf::parse_protobuf_message(raw_record_bytes);
         // println!("Protobuf raw fields: {:#?}", record);
 
-        let record = protobuf_to_record(parsed);
+        let record = protobuf_to_record(parsed, &ipasn);
         // println!("Netflow struct: {:#?}", record);
 
         // End - Read and parse protobuf
