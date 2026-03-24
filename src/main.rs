@@ -104,13 +104,10 @@ fn protobuf_to_record(parsed: HashMap<u32, protobuf::ProtobufValue>, ipasn: &Opt
         }
     }
 
+    // If the ip2asn database is present then fill in the ASN fields
     if let Some(map) = ipasn.as_ref() {
-        if let Some(info) = map.lookup(record.addr_src) {
-            record.asn_src = Some(info.asn);
-        }
-        if let Some(info) = map.lookup(record.addr_dst) {
-            record.asn_dst = Some(info.asn);
-        }
+        record.asn_src = map.lookup(record.addr_src).map(|info| info.asn);
+        record.asn_dst = map.lookup(record.addr_dst).map(|info| info.asn);
     }
 
     record
@@ -181,7 +178,7 @@ fn main()  -> Result<(), Box<dyn Error>>  {
     let output_format: cli::OutputFormat = args.output;
     let file_path = args.path;
 
-    // If a database is specified then load it
+    // If a database is specified then load it for use when parsing
     let ipasn: Option<IpAsnMap> = args.ipasn
         .as_deref()
         .map(|path| load_ip_asn_map(path))
