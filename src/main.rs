@@ -19,6 +19,7 @@ use xz::read::XzDecoder;
 // Local
 mod cli;
 mod netflow_record;
+mod process_reader;
 mod protobuf;
 
 // Functions
@@ -124,7 +125,7 @@ fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
         Some("bz2") => Box::new(BufReader::new(BzDecoder::new(file))),
         Some("xz")  => Box::new(BufReader::new(XzDecoder::new(file))),
         Some("7z") => {
-            let child = Command::new("7z")
+            let mut child = Command::new("7z")
                 .arg("e")                         // Extract
                 .arg("-so")                       // Write output to stdout
                 .arg(file_path)
@@ -132,8 +133,11 @@ fn open_file(file_path: &String) -> io::Result<Box<dyn BufRead>> {
                 .spawn()
                 .expect("Failed to spawn 7z");
 
-            let stdout = child.stdout.expect("Failed to capture 7z stdout");
-            Box::new(BufReader::new(stdout))
+            let stdout = child.stdout.take().unwrap();
+            Box::new(process_reader::ProcessReader {
+                child,
+                reader: BufReader::new(stdout)
+            })
         },
         _           => Box::new(BufReader::new(file)), // plain text
     };
