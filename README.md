@@ -59,3 +59,11 @@ This program outputs a single line for each matching record to stdout.
 | json | Single-line json object. |
 | csv | Single-line CSV record. A header is printed once at the start. |
 | none | No record output, useful for counting records that match a filter before inspecting the records themselves. Doesn't surpress the "Searching for" or count lines. See no-frame option for that. |
+
+
+
+## Running as a test
+
+```bash
+cargo run -- --path goflow2_20260114_1600.log
+```
